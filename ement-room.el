@@ -4193,6 +4193,32 @@ If FORMATTED-P, return the formatted body content, when available."
     (when (equal "m.replace" rel-type)
       ;; Message is an edit.
       (setf body (concat body " " (propertize "[edited]" 'face 'font-lock-comment-face))))
+    (when-let* ((relates-to (alist-get 'm.relates_to (ement-event-content event)))
+                (room-id (ement-room-id ement-room))
+                (in-reply-to (alist-get 'm.in_reply_to relates-to))
+                (replied-event-id (alist-get 'event_id in-reply-to))
+                (replied-event (gethash replied-event-id (ement-session-events session)))
+                (replied-sender (ement-event-sender replied-event))
+                (replied-sender-name (ement--user-displayname-in ement-room replied-sender))
+                (replied-content (ement-event-content replied-event))
+                (replied-body (or (alist-get 'formatted_body replied-content)
+                                  (alist-get 'body replied-content)
+                                  "[no content]"))
+                (reply-formatted-body-with-quote
+                 (ement-room--render-html
+                 (format
+                  "<mx-reply>
+  <blockquote>
+    <a href=\"https://matrix.to/#/%s/%s\">In reply to</a>
+    <a href=\"https://matrix.to/#/%s\">%s</a>
+    <br />
+    %s
+  </blockquote>
+</mx-reply>"
+                  room-id replied-event-id replied-sender replied-sender-name replied-body))))
+      (setf body (concat reply-formatted-body-with-quote "
+" body)))
+
     (when (and (or local-redacted-by unsigned-redacted-by)
                ement-room-hide-redacted-message-content)
       ;; Message is redacted and hiding is enabled: override the body to hide the content.
